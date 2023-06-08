@@ -2,7 +2,7 @@ const express = require("express");
 const cors = require("cors");
 require("dotenv").config();
 const jwt = require("jsonwebtoken");
-const { MongoClient, ServerApiVersion } = require("mongodb");
+const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 
 const app = express();
 
@@ -55,7 +55,7 @@ async function run() {
     const selectedCoursesCollection = client
       .db("musicmaestro")
       .collection("selectedCourses");
-    const courseCollection = client.db("musicmaestro").collection("course");
+    const classesCollection = client.db("musicmaestro").collection("classes");
     const usersCollection = client.db("musicmaestro").collection("users");
 
     // create jwt token
@@ -66,6 +66,30 @@ async function run() {
       });
       res.send({ token });
     });
+
+    const verifyAdmin = async (req, res, next) => {
+      const email = req.decoded.email;
+      const query = { email: email };
+      const user = await usersCollection.findOne(query);
+      if (!user?.admin) {
+        return res
+          .status(403)
+          .send({ error: true, message: "Forbidden Access" });
+      }
+      next();
+    };
+
+    const verifyInstructor = async (req, res, next) => {
+      const email = req.decoded.email;
+      const query = { email: email };
+      const user = await usersCollection.findOne(query);
+      if (!user?.instructor) {
+        return res
+          .status(403)
+          .send({ error: true, message: "Forbidden Access" });
+      }
+      next();
+    };
 
     // save user in database with email and role
     app.put("/users/:email", async (req, res) => {
@@ -81,7 +105,7 @@ async function run() {
     });
 
     // get all users
-    app.get("/users", verifyJWT, async (req, res) => {
+    app.get("/users", verifyJWT, verifyAdmin, async (req, res) => {
       const result = await usersCollection.find().toArray();
       res.send(result);
     });
@@ -91,6 +115,87 @@ async function run() {
       const email = req.params.email;
       const query = { email: email };
       const result = await usersCollection.findOne(query);
+      res.send(result);
+    });
+
+    // delete user
+    app.delete("/users/:id", async (req, res) => {
+      const id = req.params.id;
+      const query = { _id: new ObjectId(id) };
+      const result = await usersCollection.deleteOne(query);
+      res.send(result);
+    });
+
+    // Add Classes
+    app.post("/classes", async (req, res) => {
+      const insertClass = req.body;
+      const result = await classesCollection.insertOne(insertClass);
+      res.send(result);
+    });
+
+    // get all Classes by admin
+    app.get("/classes", verifyJWT, verifyAdmin, async (req, res) => {
+      const result = await classesCollection.find().toArray();
+      res.send(result);
+    });
+
+    // get classes filter by email instructor
+    app.get(
+      "/classes/:email",
+      verifyJWT,
+      verifyInstructor,
+      async (req, res) => {
+        const email = req.params.email;
+        const query = { instructorEmail: email };
+        const result = await classesCollection.find(query).toArray();
+        res.send(result);
+      }
+    );
+
+    // update Classes by approved
+    app.patch("/approvedclass/:id", async (req, res) => {
+      const id = req.params.id;
+      const query = { _id: new ObjectId(id) };
+      const updateDoc = {
+        $set: {
+          status: "approved",
+        },
+      };
+
+      const result = await classesCollection.updateOne(query, updateDoc);
+      res.send(result);
+    });
+
+    // update Classes by deny
+    app.patch("/denyclasses/:id", async (req, res) => {
+      const id = req.params.id;
+      const query = { _id: new ObjectId(id) };
+      const updateDoc = {
+        $set: {
+          status: "deny",
+        },
+      };
+
+      const result = await classesCollection.updateOne(query, updateDoc);
+      res.send(result);
+    });
+
+    // feedback classes added to
+    app.put("/classes/:id", async (req, res) => {
+      const id = req.params.id;
+      const feedback = req.body;
+      const query = { _id: new ObjectId(id) };
+      const option = { upsert: true };
+      const updateDoc = {
+        $set: {
+          feedback: feedback,
+        },
+      };
+      const result = await classesCollection.updateOne(
+        query,
+        updateDoc,
+        option
+      );
       res.send(result);
     });
 
