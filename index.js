@@ -127,14 +127,14 @@ async function run() {
     });
 
     // Add Classes
-    app.post("/classes", async (req, res) => {
+    app.post("/classes", verifyJWT, verifyInstructor, async (req, res) => {
       const insertClass = req.body;
       const result = await classesCollection.insertOne(insertClass);
       res.send(result);
     });
 
     // get all Classes by admin
-    app.get("/classes",  async (req, res) => {
+    app.get("/classes", async (req, res) => {
       const result = await classesCollection.find().toArray();
       res.send(result);
     });
@@ -180,10 +180,23 @@ async function run() {
       res.send(result);
     });
 
-    // get approved classes 
-    app.get("/approvedclasses", async(req, res) => {
-      const query = { status: }
-    })
+    // get approved classes
+    app.get("/approvedclasses", async (req, res) => {
+      const result = await classesCollection
+        .find({ status: "approved" })
+        .toArray();
+      res.send(result);
+    });
+
+    // get all instructor
+    app.get("/allinstructor", async (req, res) => {
+      const result = await usersCollection
+        .find({
+          instructor: true,
+        })
+        .toArray();
+      res.send(result);
+    });
 
     // feedback classes added to
     app.put("/classes/:id", async (req, res) => {
@@ -201,6 +214,17 @@ async function run() {
         updateDoc,
         option
       );
+      res.send(result);
+    });
+
+    // decrease available set when click the class
+    app.put("/decreaseclasses/:id", async (req, res) => {
+      const id = req.params.id;
+      const query = { _id: new ObjectId(id) };
+      const updateDoc = {
+        $inc: { availableSeats: -1 },
+      };
+      const result = await classesCollection.updateOne(query, updateDoc);
       res.send(result);
     });
 
