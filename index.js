@@ -134,7 +134,7 @@ async function run() {
     });
 
     // get all Classes by admin
-    app.get("/classes", verifyJWT, verifyAdmin, async (req, res) => {
+    app.get("/classes",  async (req, res) => {
       const result = await classesCollection.find().toArray();
       res.send(result);
     });
@@ -180,15 +180,20 @@ async function run() {
       res.send(result);
     });
 
+    // get approved classes 
+    app.get("/approvedclasses", async(req, res) => {
+      const query = { status: }
+    })
+
     // feedback classes added to
     app.put("/classes/:id", async (req, res) => {
       const id = req.params.id;
-      const feedback = req.body;
+      const feedbackMessage = req.body;
       const query = { _id: new ObjectId(id) };
       const option = { upsert: true };
       const updateDoc = {
         $set: {
-          feedback: feedback,
+          feedback: feedbackMessage,
         },
       };
       const result = await classesCollection.updateOne(
