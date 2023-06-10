@@ -5,8 +5,9 @@ const jwt = require("jsonwebtoken");
 const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 
 const app = express();
-
 const port = process.env.PORT || 5000;
+
+const stripe = require("stripe")(process.env.PAYMENT_SECRET_KEY);
 
 const corsOptions = {
   origin: "*",
@@ -52,11 +53,25 @@ async function run() {
     // Connect the client to the server	(optional starting in v4.7)
     // await client.connect();
 
-    const selectedCoursesCollection = client
-      .db("musicmaestro")
-      .collection("selectedCourses");
     const classesCollection = client.db("musicmaestro").collection("classes");
     const usersCollection = client.db("musicmaestro").collection("users");
+    const cartCollection = client.db("musicmaestro").collection("carts");
+
+    // generate client secret
+    app.post("/create-payment-intent", verifyJWT, async (req, res) => {
+      const { price } = req.body;
+      const amount = parseFloat(price) * 100;
+      if (price) {
+        const paymentIntent = await stripe.paymentIntents.create({
+          amount: amount,
+          currency: "usd",
+          payment_method_types: ["card"],
+        });
+        res.send({
+          clientSecret: paymentIntent.client_secret,
+        });
+      }
+    });
 
     // create jwt token
     app.post("/jwt", (req, res) => {
@@ -90,6 +105,34 @@ async function run() {
       }
       next();
     };
+
+    // cart collection
+    app.post("/carts", async (req, res) => {
+      const item = req.body;
+      const result = await cartCollection.insertOne(item);
+      res.send(result);
+    });
+
+    // get cart query by email
+    app.get("/carts", verifyJWT, async (req, res) => {
+      const email = req.query.email;
+
+      if (!email) {
+        res.send([]);
+      }
+
+      const query = { email: email };
+      const result = await cartCollection.find(query).toArray();
+      res.send(result);
+    });
+
+    // delete booked cart
+    app.delete("/bookedclassdelete/:id", async (req, res) => {
+      const id = req.params.id;
+      const query = { _id: new ObjectId(id) };
+      const result = await cartCollection.deleteOne(query);
+      res.send(result);
+    });
 
     // save user in database with email and role
     app.put("/users/:email", async (req, res) => {
