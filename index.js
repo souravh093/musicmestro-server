@@ -56,8 +56,9 @@ async function run() {
     const classesCollection = client.db("musicmaestro").collection("classes");
     const usersCollection = client.db("musicmaestro").collection("users");
     const cartCollection = client.db("musicmaestro").collection("carts");
+    const paymentCollection = client.db("musicmaestro").collection("payments");
 
-    // generate client secret
+    // generate client secret payment method
     app.post("/create-payment-intent", verifyJWT, async (req, res) => {
       const { price } = req.body;
       const amount = parseFloat(price) * 100;
@@ -71,6 +72,18 @@ async function run() {
           clientSecret: paymentIntent.client_secret,
         });
       }
+    });
+
+    // payment information save in database
+    app.post("/payment", verifyJWT, async (req, res) => {
+      const paymentInfo = req.body;
+      const insertResult = await paymentCollection.insertOne(paymentInfo);
+
+      // const query = {
+      //   _id: { $in: paymentInfo.cartItems.map((id) => new ObjectId(id)) },
+      // };
+      // const deleteResult = await cartCollection.deleteMany(query);
+      res.send(insertResult);
     });
 
     // create jwt token
