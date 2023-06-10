@@ -79,11 +79,19 @@ async function run() {
       const paymentInfo = req.body;
       const insertResult = await paymentCollection.insertOne(paymentInfo);
 
-      // const query = {
-      //   _id: { $in: paymentInfo.cartItems.map((id) => new ObjectId(id)) },
-      // };
-      // const deleteResult = await cartCollection.deleteMany(query);
-      res.send(insertResult);
+      const query = {
+        _id: { $in: paymentInfo.cartItems.map((id) => new ObjectId(id)) },
+      };
+      const deleteResult = await cartCollection.deleteMany(query);
+      res.send({ insertResult, deleteResult });
+    });
+
+    // get payment history in database
+    app.get("/payment/:email", verifyJWT, async (req, res) => {
+      const email = req.params.email;
+      const query = { "student.email": email };
+      const result = await paymentCollection.find(query).toArray();
+      res.send(result);
     });
 
     // create jwt token
@@ -274,14 +282,20 @@ async function run() {
     });
 
     // decrease available set when click the class
-    app.put("/decreaseclasses/:id", async (req, res) => {
-      const id = req.params.id;
-      const query = { _id: new ObjectId(id) };
-      const updateDoc = {
-        $inc: { availableSeats: -1 },
-      };
-      const result = await classesCollection.updateOne(query, updateDoc);
-      res.send(result);
+    app.put("/decreaseclass", async (req, res) => {
+      const paymentInfo = req.body;
+
+      const { classItemsId } = paymentInfo;
+      for (const classItemId of classItemsId) {
+        await classesCollection.updateOne(
+          { _id: new ObjectId(classItemId) },
+          { $inc: { availableSeats: -1 } }
+        );
+      }
+
+      res.json({
+        message: "Payment successful. available sets update updated.",
+      });
     });
 
     // Send a ping to confirm a successful connection
