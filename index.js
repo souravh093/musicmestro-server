@@ -58,6 +58,7 @@ async function run() {
     const cartCollection = client.db("musicmaestro").collection("carts");
     const paymentCollection = client.db("musicmaestro").collection("payments");
 
+
     // generate client secret payment method
     app.post("/create-payment-intent", verifyJWT, async (req, res) => {
       const { price } = req.body;
@@ -93,6 +94,29 @@ async function run() {
       const result = await paymentCollection.find(query).toArray();
       res.send(result);
     });
+
+    // studentenrolledclass 
+    app.get("/studentenrolledclass/:email", async (req, res) => {
+      const email = req.params.email;
+      const query = { "student.email": email };
+      const data = []
+
+      const paymentData = await paymentCollection.find(query).toArray();
+
+      for (const paidData of paymentData) {
+        const tampClass = []
+        for(const singleClass of paidData.classItemsId) {
+          const classData = await classesCollection.findOne({_id: new ObjectId(singleClass) });
+          tampClass.push({...classData})
+          
+        }
+        delete paidData.classItemsId
+        data.push({...paidData, classItemsId:tampClass})
+      }
+      res.send(data)
+    });
+    
+    
 
     // create jwt token
     app.post("/jwt", (req, res) => {
@@ -198,7 +222,7 @@ async function run() {
     });
 
     // get all Classes by admin
-    app.get("/classes", async (req, res) => {
+    app.get("/classes", verifyJWT, verifyAdmin, async (req, res) => {
       const result = await classesCollection.find().toArray();
       res.send(result);
     });
@@ -215,6 +239,25 @@ async function run() {
         res.send(result);
       }
     );
+
+    // update class by instructor
+    app.put("/classupdate/:id", async (req, res) => {
+      const id = req.params.id;
+      const query = { _id: new ObjectId(id) };
+      const updateInfo = req.body;
+      const updateDoc = {
+        $set: {
+          image: updateInfo.image,
+          className: updateInfo.className,
+          availableSeats: updateInfo.availableSeats,
+          status: "pending",
+          price: updateInfo.price,
+        },
+      };
+
+      const result = await classesCollection.updateOne(query, updateDoc);
+      res.send(result);
+    });
 
     // update Classes by approved
     app.patch("/approvedclass/:id", async (req, res) => {
@@ -296,6 +339,49 @@ async function run() {
       res.json({
         message: "Payment successful. available sets update updated.",
       });
+    });
+
+    // total enroll student enroll added
+    app.put("/totalenrollstudent", async (req, res) => {
+      const paymentInfo = req.body;
+      const { classItemsId } = paymentInfo;
+      for (const classItemId of classItemsId) {
+        await classesCollection.updateOne(
+          { _id: new ObjectId(classItemId) },
+          { $inc: { totalEnrollStudent: +1 } }
+        );
+      }
+
+      res.json({
+        message: "Enroll Student increment",
+      });
+    });
+
+    // get popular classes by limit is 6
+    app.get("/classeslimit", async (req, res) => {
+      const result = await classesCollection
+        .find()
+        .sort({ totalEnrollStudent: -1 })
+        .limit(6)
+        .toArray();
+      res.send(result);
+    });
+
+    // get popular instructor
+    app.get("/instructorlimit", async (req, res) => {
+      const classes = await classesCollection
+        .find()
+        .sort({ totalEnrollStudent: -1 })
+        .toArray();
+
+      const instructorEmails = classes.map((cls) => cls.instructorEmail);
+      const uniqueEmail = [...new Set([...instructorEmails])];
+      const instructorItems = await usersCollection
+        .find({ email: { $in: uniqueEmail } })
+        .limit(6)
+        .toArray();
+
+      res.send(instructorItems);
     });
 
     // Send a ping to confirm a successful connection
